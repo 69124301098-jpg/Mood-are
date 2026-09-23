@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MoodCare</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--bg:#f7f7fb;--card:#fff;--text:#24242b;--muted:#70707a;--line:#e7e7ee;--accent:#6d5dfc;--accent2:#efeefe;--danger:#c83b4a}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+    .wrap{max-width:900px;margin:auto;padding:20px}.brand{text-align:center;margin:12px 0 22px}.brand h1{margin:0;font-size:34px}.brand p{margin:5px;color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin:14px 0;box-shadow:0 5px 20px #00000008}
+    input,textarea,select{width:100%;padding:12px;border:1px solid #dcdce5;border-radius:12px;font:inherit;margin-top:7px;background:#fff}
+    textarea{min-height:130px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}
+    button{border:0;border-radius:12px;padding:11px 16px;font:inherit;font-weight:650;cursor:pointer}.primary{background:var(--accent);color:#fff}.secondary{background:var(--accent2);color:#5146c9}.danger{background:#fff0f1;color:var(--danger)}
+    .tabs{display:flex;gap:8px;margin-bottom:14px}.tabs button{flex:1}.hidden{display:none!important}.msg{padding:10px;border-radius:10px;background:#f2f2f7;margin-top:10px}.error{color:var(--danger);background:#fff0f1}.success{color:#246b3c;background:#eefaf1}
+    .moods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}.mood{background:#fafafd;border:1px solid var(--line);padding:12px 6px}.mood.selected{border:2px solid var(--accent);background:var(--accent2)}
+    .checkgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}.check{border:1px solid var(--line);padding:10px;border-radius:10px}
+    .entry{border-top:1px solid var(--line);padding:15px 0}.entry:first-child{border-top:0}.meta{font-size:13px;color:var(--muted)}.tag{display:inline-block;background:#f1f0ff;color:#5146c9;padding:4px 8px;border-radius:999px;font-size:12px;margin:3px 3px 0 0}
+    @media(max-width:650px){.row{grid-template-columns:1fr}.moods{grid-template-columns:repeat(2,1fr)}.checkgrid{grid-template-columns:1fr}.wrap{padding:12px}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><h1>🌿 MoodCare</h1><p>พื้นที่สำหรับตระหนักรู้อารมณ์และดูแลตัวเอง</p></div>
+
+  <section id="auth" class="card">
+    <div class="tabs">
+      <button id="tabLogin" class="primary" onclick="showAuth('login')">เข้าสู่ระบบ</button>
+      <button id="tabSignup" class="secondary" onclick="showAuth('signup')">สมัครสมาชิก</button>
+    </div>
+    <div id="loginBox">
+      <label>อีเมล<input id="loginEmail" type="email" autocomplete="email" placeholder="example@email.com"></label>
+      <label>รหัสผ่าน<input id="loginPassword" type="password" autocomplete="current-password" placeholder="อย่างน้อย 6 ตัวอักษร"></label>
+      <button class="primary" style="width:100%;margin-top:14px" onclick="login()">เข้าสู่ระบบ</button>
+    </div>
+    <div id="signupBox" class="hidden">
+      <label>ชื่อที่แสดง<input id="signupName" maxlength="80" placeholder="ชื่อเล่นหรือชื่อที่ต้องการให้แสดง"></label>
+      <label>อีเมล<input id="signupEmail" type="email" autocomplete="email" placeholder="example@email.com"></label>
+      <label>รหัสผ่าน<input id="signupPassword" type="password" autocomplete="new-password" placeholder="อย่างน้อย 6 ตัวอักษร"></label>
+      <button class="primary" style="width:100%;margin-top:14px" onclick="signup()">สมัครสมาชิก</button>
+    </div>
+    <div id="authMsg"></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><b>สวัสดี <span id="userName">เพื่อน</span> 👋</b><div class="meta" id="userEmail"></div></div>
+      <button class="secondary" onclick="logout()">ออกจากระบบ</button>
+    </div>
+
+    <form class="card" id="entryForm" onsubmit="saveEntry(event)">
+      <h2>📝 บันทึก Mood Story</h2>
+      <div class="row">
+        <div class="full">
+          <label>วันนี้รู้สึกอย่างไร?</label>
+          <div class="moods" id="moods"></div>
+        </div>
+        <div>
+          <label>ระดับความรู้สึก <span id="intensityValue">3</span>/5
+            <input id="intensity" type="range" min="1" max="5" value="3" oninput="intensityValue.textContent=this.value">
+          </label>
+        </div>
+        <div>
+          <label>วันที่
+            <input id="entryDate" type="date">
+          </label>
+        </div>
+        <div class="full">
+          <label>เกิดอะไรขึ้นบ้าง? <span class="meta">(เขียนได้ไม่จำกัด)</span>
+            <textarea id="note" placeholder="เขียนสิ่งที่เกิดขึ้น ความคิด หรือความรู้สึกของคุณ..."></textarea>
+          </label>
+        </div>
+        <div class="full">
+          <label>สาเหตุที่เกี่ยวข้อง</label>
+          <div class="checkgrid" id="causes"></div>
+        </div>
+        <div class="full">
+          <label>สภาพร่างกายตอนนี้</label>
+          <div class="checkgrid" id="bodyStates"></div>
+        </div>
+        <div class="full">
+          <label>วิธีดูแลตัวเองที่เลือก</label>
+          <div class="checkgrid" id="selfCare"></div>
+        </div>
+      </div>
+      <button class="primary" style="width:100%;margin-top:15px">บันทึก Mood Story</button>
+      <div id="saveMsg"></div>
+    </form>
+
+    <div class="card">
+      <h2>📖 ประวัติของฉัน</h2>
+      <div id="history"><div class="meta">กำลังโหลด...</div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ysgecwpwzdcnhlemssan.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XV6srXaKVHdxD8ZfRIpj9g_CI9BE7aU";
+let sb = null, currentUser = null, selectedMood = "";
+
+const moods = [
+  ["😊","มีความสุข"],["😌","ผ่อนคลาย"],["😐","เฉย ๆ"],["😟","กังวล"],
+  ["😴","เหนื่อย"],["😢","เศร้า"],["😠","หงุดหงิด"],["🥱","พลังงานต่ำ"]
+];
+const causes = ["การเรียน","งาน/การบ้าน","อาจารย์","เพื่อน","ครอบครัว","การเงิน","ความสัมพันธ์","การนอน","อาหาร","โซเชียลมีเดีย","การฝึกปฏิบัติ","อื่น ๆ"];
+const bodyStates = ["นอนน้อย","ปวดศีรษะ","อ่อนเพลีย","ปวดคอ/ไหล่/หลัง","กินอาหารไม่เป็นเวลา","ดื่มน้ำน้อย","ได้ออกกำลังกาย","รู้สึกสดชื่น"];
+const selfCare = ["ฝึกหายใจ","พักสายตา","ยืดเหยียดร่างกาย","ฝึกสติ","ฟังเสียงผ่อนคลาย","เขียนระบายความรู้สึก","พูดคุยกับคนที่ไว้ใจ"];
+
+function initUI(){
+  moodsEl = document.getElementById("moods");
+  moods.forEach(([e,t])=>{let b=document.createElement("button");b.type="button";b.className="mood";b.innerHTML=`${e}<br><small>${t}</small>`;b.onclick=()=>{selectedMood=t;document.querySelectorAll(".mood").forEach(x=>x.classList.remove("selected"));b.classList.add("selected")};moodsEl.appendChild(b)});
+  renderChecks("causes",causes,"cause");
+  renderChecks("bodyStates",bodyStates,"body");
+  renderChecks("selfCare",selfCare,"care");
+  document.getElementById("entryDate").value = new Date().toISOString().slice(0,10);
+}
+function renderChecks(id,items,prefix){
+  const el=document.getElementById(id);
+  items.forEach((x,i)=>{let l=document.createElement("label");l.className="check";l.innerHTML=`<input type="checkbox" data-group="${prefix}" value="${escapeHtml(x)}"> ${escapeHtml(x)}`;el.appendChild(l)});
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function showAuth(mode){
+  loginBox.classList.toggle("hidden",mode!=="login"); signupBox.classList.toggle("hidden",mode!=="signup");
+  tabLogin.className=mode==="login"?"primary":"secondary"; tabSignup.className=mode==="signup"?"primary":"secondary"; authMsg.innerHTML="";
+}
+function message(el,text,type=""){el.innerHTML=`<div class="msg ${type}">${escapeHtml(text)}</div>`;}
+function configReady(){
+  return !SUPABASE_URL.includes("PASTE_") && !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+}
+async function signup(){
+  if(!configReady()) return message(authMsg,"ยังไม่ได้ตั้งค่า Supabase ในไฟล์นี้","error");
+  const name=signupName.value.trim(), email=signupEmail.value.trim(), password=signupPassword.value;
+  if(!email||password.length<6) return message(authMsg,"กรุณากรอกอีเมลและรหัสผ่านอย่างน้อย 6 ตัวอักษร","error");
+  const {data,error}=await sb.auth.signUp({email,password,options:{data:{display_name:name}}});
+  if(error) return message(authMsg,error.message,"error");
+  if(data.session) message(authMsg,"สมัครสมาชิกสำเร็จ กำลังเข้าสู่ระบบ...","success");
+  else message(authMsg,"สมัครสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี แล้วเข้าสู่ระบบ","success");
+}
+async function login(){
+  if(!configReady()) return message(authMsg,"ยังไม่ได้ตั้งค่า Supabase ในไฟล์นี้","error");
+  const {data,error}=await sb.auth.signInWithPassword({email:loginEmail.value.trim(),password:loginPassword.value});
+  if(error) return message(authMsg,error.message,"error");
+  await startApp(data.user);
+}
+async function logout(){await sb.auth.signOut();currentUser=null;app.classList.add("hidden");auth.classList.remove("hidden");}
+async function startApp(user){
+  currentUser=user; auth.classList.add("hidden"); app.classList.remove("hidden");
+  userName.textContent=user.user_metadata?.display_name || "เพื่อน"; userEmail.textContent=user.email||"";
+  await loadEntries();
+}
+function vals(group){return [...document.querySelectorAll(`input[data-group="${group}"]:checked`)].map(x=>x.value);}
+async function saveEntry(e){
+  e.preventDefault(); if(!currentUser) return;
+  if(!selectedMood) return message(saveMsg,"กรุณาเลือกอารมณ์ก่อนบันทึก","error");
+  const payload={
+    user_id:currentUser.id, entry_date:entryDate.value, mood:selectedMood,
+    intensity:Number(intensity.value), note:note.value,
+    causes:vals("cause"), body_states:vals("body"), self_care:vals("care")
+  };
+  const {error}=await sb.from("mood_entries").insert(payload);
+  if(error) return message(saveMsg,error.message,"error");
+  message(saveMsg,"บันทึกเรียบร้อยแล้ว 💚","success");
+  note.value=""; document.querySelectorAll("input[type=checkbox]").forEach(x=>x.checked=false);
+  selectedMood=""; document.querySelectorAll(".mood").forEach(x=>x.classList.remove("selected"));
+  await loadEntries();
+}
+function tags(arr){return (arr||[]).map(x=>`<span class="tag">${escapeHtml(x)}</span>`).join("");}
+function moodEmoji(m){return (moods.find(x=>x[1]===m)||["🙂",""]).at(0);}
+async function loadEntries(){
+  const {data,error}=await sb.from("mood_entries").select("*").order("created_at",{ascending:false});
+  if(error) return history.innerHTML=`<div class="msg error">${escapeHtml(error.message)}</div>`;
+  if(!data?.length){history.innerHTML='<div class="meta">ยังไม่มีบันทึก ลองบันทึกเรื่องราววันนี้ได้เลย 🌱</div>';return;}
+  history.innerHTML=data.map(x=>`
+    <div class="entry">
+      <div><b>${moodEmoji(x.mood)} ${escapeHtml(x.mood)}</b> · ระดับ ${x.intensity}/5</div>
+      <div class="meta">${escapeHtml(x.entry_date||"")} · ${new Date(x.created_at).toLocaleString("th-TH")}</div>
+      ${x.note?`<p style="white-space:pre-wrap">${escapeHtml(x.note)}</p>`:""}
+      <div>${tags(x.causes)}${tags(x.body_states)}${tags(x.self_care)}</div>
+      <button class="danger" style="margin-top:9px" onclick="deleteEntry('${x.id}')">ลบรายการ</button>
+    </div>`).join("");
+}
+async function deleteEntry(id){
+  if(!confirm("ต้องการลบรายการนี้หรือไม่?")) return;
+  const {error}=await sb.from("mood_entries").delete().eq("id",id);
+  if(error) return alert(error.message);
+  await loadEntries();
+}
+(async function(){
+  initUI();
+  if(!configReady()) return;
+  sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+  const {data}=await sb.auth.getSession();
+  if(data.session) await startApp(data.session.user);
+  sb.auth.onAuthStateChange((_event,session)=>{ if(session) startApp(session.user); });
+})();
+</script>
+</body>
+</html>
