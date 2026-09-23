@@ -98,6 +98,7 @@
 <script>
 const SUPABASE_URL = "https://ysgecwpwzdcnhlemssan.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XV6srXaKVHdxD8ZfRIpj9g_CI9BE7aU";
+const ADMIN_EMAIL = "69124301098@snc.ac.tg";
 let sb = null, currentUser = null, selectedMood = "";
 
 const moods = [
@@ -149,6 +150,7 @@ async function startApp(user){
   currentUser=user; auth.classList.add("hidden"); app.classList.remove("hidden");
   userName.textContent=user.user_metadata?.display_name || "เพื่อน"; userEmail.textContent=user.email||"";
   await loadEntries();
+  addAdminButton(user);
 }
 function vals(group){return [...document.querySelectorAll(`input[data-group="${group}"]:checked`)].map(x=>x.value);}
 async function saveEntry(e){
@@ -194,6 +196,51 @@ async function deleteEntry(id){
   const {data}=await sb.auth.getSession();
   if(data.session) await startApp(data.session.user);
   sb.auth.onAuthStateChange((_event,session)=>{ if(session) startApp(session.user); });
+  function addAdminButton(user){
+  if(user.email !== ADMIN_EMAIL) return;
+
+  if(document.getElementById("adminBtn")) return;
+
+  const btn = document.createElement("button");
+  btn.id = "adminBtn";
+  btn.textContent = "🛡️ Admin Dashboard";
+  btn.style.marginTop = "10px";
+
+  btn.onclick = async () => {
+    const {data, error} = await sb
+      .from("mood_entries")
+      .select("*")
+      .order("created_at", {ascending:false});
+
+    if(error){
+      alert(error.message);
+      return;
+    }
+
+    const box = document.createElement("div");
+    box.style.marginTop = "20px";
+    box.innerHTML = `
+      <h2>🛡️ Admin Dashboard</h2>
+      <p>จำนวนรายการทั้งหมด: ${data.length}</p>
+      ${data.map(x => `
+        <div class="entry" style="margin-top:10px">
+          <b>${escapeHtml(x.mood)} · ระดับ ${x.intensity}/5</b>
+          <div class="meta">
+            วันที่ ${escapeHtml(x.entry_date || "")}
+          </div>
+          <div>สาเหตุ: ${tags(x.causes)}</div>
+          <div>ร่างกาย: ${tags(x.body_states)}</div>
+          <div>การดูแลตัวเอง: ${tags(x.self_care)}</div>
+          ${x.note ? `<p>บันทึก: ${escapeHtml(x.note)}</p>` : ""}
+        </div>
+      `).join("")}
+    `;
+
+    document.body.appendChild(box);
+  };
+
+  document.body.appendChild(btn);
+}
 })();
 </script>
 </body>
